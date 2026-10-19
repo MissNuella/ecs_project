@@ -1,0 +1,111 @@
+name: Build and deploy to ECS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  id-token: write # needed for AWS OIDC
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  PROJECT: ecs-notes
+
+jobs:
+  validate:
+    name: Validate Terraform and Packer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt and validate
+        working-directory: terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
+
+      - uses: hashicorp/setup-packer@main
+
+      - name: Packer validate
+        run: |
+          packer init packer/
+          packer fmt -check packer/
+          packer validate -syntax-only packer/
+
+  deploy:
+    name: Bake images and deploy
+    needs: validate
+    # Runs only on main, and only once the AWS_ROLE_ARN repository variable exists,
+    # so the repo stays green before AWS is set up.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.AWS_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: hashicorp/setup-packer@main
+
+      - name: Bake and push images with Packer
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          packer init packer/
+          packer build \
+            -var "api_ecr_repository=$REGISTRY/$PROJECT-api" \
+            -var "web_ecr_repository=$REGISTRY/$PROJECT-web" \
+            -var "image_tag=${{ github.sha }}" \
+            packer/
+
+      - name: Download current task definitions
+        run: |
+          for svc in web api; do
+            aws ecs describe-task-definition --task-definition "$PROJECT-$svc" \
+              --query taskDefinition > "task-$svc.json"
+          done
+
+      - name: Render API task definition
+        id: render-api
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-api.json
+          container-name: api
+          image: ${{ steps.ecr.outputs.registry }}/${{ env.PROJECT }}-api:${{ github.sha }}
+
+      - name: Deploy API service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-api.outputs.task-definition }}
+          cluster: ${{ env.PROJECT }}-cluster
+          service: ${{ env.PROJECT }}-api
+          wait-for-service-stability: true
+
+      - name: Render web task definition
+        id: render-web
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-web.json
+          container-name: web
+          image: ${{ steps.ecr.outputs.registry }}/${{ env.PROJECT }}-web:${{ github.sha }}
+
+      - name: Deploy web service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-web.outputs.task-definition }}
+          cluster: ${{ env.PROJECT }}-cluster
+          service: ${{ env.PROJECT }}-web
+          wait-for-service-stability: true

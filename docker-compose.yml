@@ -1,0 +1,33 @@
+# Run the whole three-tier app locally: docker compose up --build
+# Then open http://localhost:8080
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: notes
+      POSTGRES_USER: notes
+      POSTGRES_PASSWORD: localdevpassword
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notes"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./app/backend
+    environment:
+      DB_HOST: db
+      DB_NAME: notes
+      DB_USER: notes
+      DB_PASSWORD: localdevpassword
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./app/frontend
+    environment:
+      API_HOST: api
+    ports:
+      - "8080:80"
+    depends_on:
+      - api

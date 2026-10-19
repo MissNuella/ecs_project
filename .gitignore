@@ -1,0 +1,20 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+.terraform.lock.hcl
+
+# Packer
+packer_cache/
+
+# Node
+node_modules/
+
+# Rendered task definitions from CI
+task-*.json
+
+.env
+.DS_Store

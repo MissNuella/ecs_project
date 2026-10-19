@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ECS Notes</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; background: #f6f7f9; color: #1d2330; }
+    h1 { margin-bottom: 4px; }
+    p.sub { color: #5b6475; margin-top: 0; }
+    form { display: flex; gap: 8px; margin: 24px 0; }
+    input { flex: 1; padding: 10px; border: 1px solid #c8cdd6; border-radius: 6px; }
+    button { padding: 10px 16px; border: 0; border-radius: 6px; background: #ff9900; color: #1d2330; font-weight: 600; cursor: pointer; }
+    li { background: #fff; padding: 12px; margin-bottom: 8px; border-radius: 6px; list-style: none; display: flex; justify-content: space-between; }
+    ul { padding: 0; }
+    #status { font-size: 14px; color: #5b6475; }
+  </style>
+</head>
+<body>
+  <h1>ECS Notes</h1>
+  <p class="sub">Three-tier demo: Nginx on ECS Fargate &rarr; Node API on ECS Fargate &rarr; PostgreSQL on RDS</p>
+  <p id="status">Checking API...</p>
+  <form id="form">
+    <input id="text" placeholder="Write a note" maxlength="500" required>
+    <button type="submit">Add</button>
+  </form>
+  <ul id="notes"></ul>
+  <script src="app.js"></script>
+</body>
+</html>
